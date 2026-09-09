@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ bot_name }}</title>
+<style>
+  :root {
+    --theme-color: {{ theme_color }};
+    --accent-color: {{ accent_color }};
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: radial-gradient(circle at top left, var(--theme-color) 0%, #05060a 65%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .app {
+    width: 100%;
+    max-width: 720px;
+    background: rgba(15, 15, 20, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    height: 85vh;
+  }
+  header {
+    background: linear-gradient(135deg, var(--theme-color), #05060a);
+    padding: 20px 24px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  header .icon {
+    font-size: 32px;
+    width: 52px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+  }
+  header h1 { margin: 0; font-size: 20px; color: #fff; }
+  header p { margin: 2px 0 0; font-size: 13px; color: rgba(255,255,255,0.7); }
+  #chat-window {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .msg {
+    max-width: 78%;
+    padding: 12px 16px;
+    border-radius: 16px;
+    line-height: 1.45;
+    font-size: 14.5px;
+    white-space: pre-wrap;
+  }
+  .msg.bot {
+    background: rgba(255, 255, 255, 0.08);
+    color: #f1f1f1;
+    align-self: flex-start;
+    border-bottom-left-radius: 4px;
+  }
+  .msg.user {
+    background: var(--accent-color);
+    color: #05060a;
+    align-self: flex-end;
+    border-bottom-right-radius: 4px;
+    font-weight: 500;
+  }
+  .msg.typing { opacity: 0.6; font-style: italic; }
+  #suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 0 20px 14px;
+  }
+  .chip {
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #e5e5e5;
+    padding: 8px 14px;
+    border-radius: 999px;
+    font-size: 12.5px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+  .chip:hover { background: var(--accent-color); color: #05060a; }
+  #input-bar {
+    display: flex;
+    gap: 10px;
+    padding: 16px 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.02);
+  }
+  #user-input {
+    flex: 1;
+    padding: 12px 16px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.06);
+    color: #fff;
+    font-size: 14.5px;
+    outline: none;
+  }
+  #user-input:focus { border-color: var(--accent-color); }
+  #send-btn {
+    background: var(--accent-color);
+    border: none;
+    color: #05060a;
+    font-weight: 700;
+    padding: 0 22px;
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 14.5px;
+  }
+  #send-btn:hover { filter: brightness(1.08); }
+  #chat-window::-webkit-scrollbar { width: 6px; }
+  #chat-window::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="icon">{{ bot_icon }}</div>
+    <div>
+      <h1>{{ bot_name }}</h1>
+      <p>{{ bot_tagline }}</p>
+    </div>
+  </header>
+
+  <div id="chat-window"></div>
+
+  <div id="suggestions">
+    {% for q in suggested_questions %}
+    <div class="chip" onclick="sendSuggested(this.textContent)">{{ q }}</div>
+    {% endfor %}
+  </div>
+
+  <div id="input-bar">
+    <input type="text" id="user-input" placeholder="Type your question..." onkeydown="if(event.key==='Enter'){sendMessage();}">
+    <button id="send-btn" onclick="sendMessage()">Send</button>
+  </div>
+</div>
+
+<script>
+  const sessionId = "session-" + Math.random().toString(36).slice(2);
+  const chatWindow = document.getElementById("chat-window");
+  const input = document.getElementById("user-input");
+
+  function appendMessage(text, sender) {
+    const bubble = document.createElement("div");
+    bubble.className = "msg " + sender;
+    bubble.textContent = text;
+    chatWindow.appendChild(bubble);
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+    return bubble;
+  }
+
+  function sendSuggested(text) {
+    input.value = text;
+    sendMessage();
+  }
+
+  async function sendMessage() {
+    const text = input.value.trim();
+    if (!text) return;
+    appendMessage(text, "user");
+    input.value = "";
+
+    const typingBubble = appendMessage("Typing...", "bot typing");
+
+    try {
+      const res = await fetch("/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text, session_id: sessionId }),
+      });
+      const data = await res.json();
+      typingBubble.remove();
+      appendMessage(data.reply, "bot");
+    } catch (err) {
+      typingBubble.remove();
+      appendMessage("Network error. Please try again.", "bot");
+    }
+  }
+
+  appendMessage("Hi! I'm {{ bot_name }}. {{ bot_tagline }}. Ask me anything within my area of expertise.", "bot");
+</script>
+</body>
+</html>
